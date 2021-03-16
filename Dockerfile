@@ -8,7 +8,8 @@ RUN apk upgrade --no-cache --update && \
 
 RUN mkdir -p /opt/cni/bin
 
-RUN curl -o cni.tgz -sSLf "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-${TARGETPLATFORM##*/}-${CNI_PLUGINS_VERSION}.tgz" && \
+RUN case $(uname -m) in amd64|x86_64) TARGET="amd64" ;; arm64|aarch64) TARGET="arm64" ;; armv7l) TARGET="arm" ;; esac  && \
+    curl -o cni.tgz -sSLf "https://github.com/containernetworking/plugins/releases/download/${CNI_PLUGINS_VERSION}/cni-plugins-linux-${TARGET}-${CNI_PLUGINS_VERSION}.tgz" && \
     tar zxvf cni.tgz -C /opt/cni/bin && \
     rm -rf cni.tgz
 
