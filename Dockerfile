@@ -1,7 +1,7 @@
-FROM alpine:3.13
+FROM alpine:3.15
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
-ARG CNI_PLUGINS_VERSION=v0.9.1
+ARG CNI_PLUGINS_VERSION=v1.1.1
 
 RUN apk upgrade --no-cache --update && \
     apk add --no-cache gettext curl
