@@ -1,37 +1,35 @@
-#!/bin/sh
+#!/usr/bin/env sh
 
 set -ex
 
-function main {
-    local action="$1"
-
-    case "${action}" in
-        install)
-            installBins
-            ;;
-        list)
-            ls -1 /opt/cni/bin
-            ;;
-        *)
-            usage
-            ;;
-    esac
+main() {
+  case "$1" in
+  install)
+    installBins
+    ;;
+  list)
+    ls -1 /opt/cni/bin
+    ;;
+  *)
+    usage
+    ;;
+  esac
 }
 
-function usage {
-    set +x
-    echo "/bin/cni-node <action>"
-    echo "Actions:"
-    echo "  install - install cni bin plugins"
-    echo "  list - lists current cni bin plugins"
+usage() {
+  set +x
+  echo "/bin/cni-node <action>"
+  echo "Actions:"
+  echo "  install - install cni bin plugins"
+  echo "  list - lists current cni bin plugins"
 }
 
 # installs ALL baked-in cni bins into /host/opt/cni/bin directory
-function installBins {
-    echo "Installing CNI plugins..."
-    mkdir -p "/host/opt/cni/bin"
-    install /opt/cni/bin/* /host/opt/cni/bin/
-    echo "...done"
+installBins() {
+  echo "Installing CNI plugins..."
+  mkdir -p "/host/opt/cni/bin"
+  install /opt/cni/bin/* /host/opt/cni/bin/
+  echo "...done"
 }
 
 main "$@"
