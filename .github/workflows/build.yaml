@@ -1,79 +1,110 @@
 name: Build
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
     tags:
-      - v*
+      - v?*
 
 jobs:
-  images:
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v2
 
+    steps:
       - name: Prepare
         id: prep
         run: |
-          DOCKER_IMAGE=quay.io/k0sproject/cni-node
-          VERSION=latest
-          SHORTREF=${GITHUB_SHA::8}
-
-          # If this is git tag, use the tag name as a docker tag
-          if [[ $GITHUB_REF == refs/tags/* ]]; then
-            VERSION=${GITHUB_REF#refs/tags/v}
-          fi
-          TAGS="${DOCKER_IMAGE}:${VERSION},${DOCKER_IMAGE}:${SHORTREF}"
-
-          # If the VERSION looks like a version number, assume that
-          # this is the most recent version of the image and also
-          # tag it 'latest'.
-          if [[ $VERSION =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
-            TAGS="$TAGS,${DOCKER_IMAGE}:latest"
+          # If this is a git tag, use the tag name as a docker tag
+          if [[ $GITHUB_REF == refs/tags/v?* ]]; then
+            registry=quay.io
+            name="$GITHUB_REPOSITORY"
+            tag="${GITHUB_REF#refs/tags/v}"
+            tag="${tag//+/-}"
+          else
+            registry=ttl.sh
+            name="${GITHUB_REPOSITORY//\//-}-$GITHUB_SHA-$GITHUB_RUN_ID"
+            tag=1d
           fi
 
-          # Set output parameters.
-          echo ::set-output name=tags::${TAGS}
-          echo ::set-output name=docker_image::${DOCKER_IMAGE}
+          {
+            echo registry="$registry"
+            echo name="$name"
+            echo tag="$tag"
+          } >>"$GITHUB_OUTPUT"
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v3.0.0
         with:
-          platforms: all
+          platforms: amd64,arm64,arm
 
       - name: Set up Docker Buildx
         id: buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3.0.0
 
-      - name: Login to Quay
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v1
+      - name: Build OCI image archive
+        id: build
+        uses: docker/build-push-action@v5.0.0
+        with:
+          builder: ${{ steps.buildx.outputs.name }}
+          platforms: linux/amd64,linux/arm64,linux/arm
+          tags: ${{ format('{0}/{1}:{2}', steps.prep.outputs.registry, steps.prep.outputs.name, steps.prep.outputs.tag) }}
+          outputs: type=oci,dest=oci-image.tar
+
+      - name: Compress OCI image archive
+        # Pre-compress the image archive so that the upload-artifact action
+        # doesn't try to do it. The layers inside the tar archive are themselves
+        # already gzip compressed, so this is not for size reduction, but solely
+        # to prevent the very slow compression process in the upload-artifact
+        # action.
+        # See: https://github.com/actions/upload-artifact/issues/199
+        # See: https://github.com/actions/toolkit/blob/6c1f9eaae833355a0b212b66c5f2e3ac366de185/packages/artifact/src/internal/upload-gzip.ts#L11-L33
+        # Might be fixed when upload-artifact@v4 gets released: https://github.com/actions/toolkit/pull/1488
+        run: zstdmt --fast oci-image.tar
+
+      - name: Upload OCI image archive
+        uses: actions/upload-artifact@v3
+        with:
+          name: oci-image.tar.zst
+          path: oci-image.tar.zst
+
+      - name: Extract OCI image archive
+        run: mkdir image && tar xf oci-image.tar.zst -C image/
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.12.0
+        with:
+          input: image/
+          format: table
+          list-all-pkgs: "true" # Flags a warning, but prints out stuff nevertheless
+          exit-code: "1"
+
+      - name: Log in to registry
+        if: steps.prep.outputs.registry != 'ttl.sh'
+        uses: redhat-actions/podman-login@v1
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          registry: quay.io
+          registry: ${{ steps.prep.outputs.registry }}
 
-      - name: Build
-        uses: docker/build-push-action@v2
-        with:
-          builder: ${{ steps.buildx.outputs.name }}
-          context: .
-          file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64,linux/arm
-          push: true
-          tags: ${{ steps.prep.outputs.tags }}
+      - name: Upload OCI image to registry
+        env:
+          REGISTRY: ${{ steps.prep.outputs.registry }}
+          NAME: ${{ steps.prep.outputs.name }}
+          TAG: ${{ steps.prep.outputs.tag }}
+        run: |
+          podmanArgs=(-v "$(realpath oci-image.tar):/image.tar:ro")
+          skopeoArgs=(--multi-arch all --preserve-digests)
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: ${{ steps.prep.outputs.tags }}
-          ignore-unfixed: true
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          if [ -e "$REGISTRY_AUTH_FILE" ]; then
+            podmanArgs+=(-v "$REGISTRY_AUTH_FILE:/auth.json:ro")
+            skopeoArgs+=(--authfile=/auth.json)
+          fi
 
-      - name: Upload Trivy scan results to GitHub Security tab
-        uses: github/codeql-action/upload-sarif@v2
-        with:
-          sarif_file: 'trivy-results.sarif'
+          set -x
+          podman run "${podmanArgs[@]}" \
+            docker://quay.io/skopeo/stable:v1.13.3 copy "${skopeoArgs[@]}" \
+            oci-archive:/image.tar "docker://$REGISTRY/$NAME:$TAG"
