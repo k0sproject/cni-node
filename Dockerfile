@@ -1,6 +1,6 @@
 ARG \
-  ALPINE_IMAGE=docker.io/library/alpine:3.18.4 \
-  GOLANG_IMAGE=docker.io/library/golang:1.20.8-alpine \
+  ALPINE_IMAGE=docker.io/library/alpine:3.19.0 \
+  GOLANG_IMAGE=docker.io/library/golang:1.21.5-alpine \
   VERSION=1.3.0 \
   HASH=f9871b9f6ccb51d2b264532e96521e44f926928f91434b56ce135c95becf2901
 
