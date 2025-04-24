@@ -66,7 +66,7 @@ jobs:
         run: zstdmt --fast oci-image.tar
 
       - name: Upload OCI image archive
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: oci-image.tar.zst
           path: oci-image.tar.zst
