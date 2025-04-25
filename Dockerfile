@@ -13,6 +13,13 @@ RUN wget https://github.com/containernetworking/plugins/archive/refs/tags/v${VER
   && rm -- "v${VERSION}.tar.gz"
 
 WORKDIR /go/plugins-$VERSION
+
+# https://github.com/containernetworking/plugins/issues/1172
+RUN set -x \
+  && go get golang.org/x/net@v0.38.0 \
+  && go mod tidy \
+  && go mod vendor
+
 ARG TARGETPLATFORM
 RUN set -x \
   && apk add bash \
