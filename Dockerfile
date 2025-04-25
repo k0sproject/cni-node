@@ -4,7 +4,7 @@ ARG \
   VERSION=1.6.2 \
   HASH=aa9a9401d27c1ad440627bbe7093d7e9ff47d325aac27b89a2cbdd56e25f3625
 
-FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE as bins
+FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE AS bins
 ARG VERSION HASH
 
 RUN wget https://github.com/containernetworking/plugins/archive/refs/tags/v${VERSION}.tar.gz \
@@ -36,11 +36,11 @@ RUN set -x \
     -ldflags "-s -w -extldflags -static -X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=v$VERSION"
 
 
-FROM $ALPINE_IMAGE as busybox
+FROM $ALPINE_IMAGE AS busybox
 RUN apk add busybox-static
 
 
-FROM $ALPINE_IMAGE as baselayout
+FROM $ALPINE_IMAGE AS baselayout
 COPY --from=busybox /bin/busybox.static /bin/busybox
 RUN /bin/busybox --install
 COPY src/cni-node /bin/cni-node
