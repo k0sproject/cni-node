@@ -1,10 +1,10 @@
 ARG \
   ALPINE_IMAGE=docker.io/library/alpine:3.21.3 \
   GOLANG_IMAGE=docker.io/library/golang:1.24.2-alpine \
-  VERSION=1.3.0 \
-  HASH=f9871b9f6ccb51d2b264532e96521e44f926928f91434b56ce135c95becf2901
+  VERSION=1.6.2 \
+  HASH=aa9a9401d27c1ad440627bbe7093d7e9ff47d325aac27b89a2cbdd56e25f3625
 
-FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE as bins
+FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE AS bins
 ARG VERSION HASH
 
 RUN wget https://github.com/containernetworking/plugins/archive/refs/tags/v${VERSION}.tar.gz \
@@ -13,6 +13,13 @@ RUN wget https://github.com/containernetworking/plugins/archive/refs/tags/v${VER
   && rm -- "v${VERSION}.tar.gz"
 
 WORKDIR /go/plugins-$VERSION
+
+# https://github.com/containernetworking/plugins/issues/1172
+RUN set -x \
+  && go get golang.org/x/net@v0.38.0 \
+  && go mod tidy \
+  && go mod vendor
+
 ARG TARGETPLATFORM
 RUN set -x \
   && apk add bash \
@@ -29,11 +36,11 @@ RUN set -x \
     -ldflags "-s -w -extldflags -static -X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=v$VERSION"
 
 
-FROM $ALPINE_IMAGE as busybox
+FROM $ALPINE_IMAGE AS busybox
 RUN apk add busybox-static
 
 
-FROM $ALPINE_IMAGE as baselayout
+FROM $ALPINE_IMAGE AS baselayout
 COPY --from=busybox /bin/busybox.static /bin/busybox
 RUN /bin/busybox --install
 COPY src/cni-node /bin/cni-node
