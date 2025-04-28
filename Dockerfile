@@ -1,8 +1,8 @@
 ARG \
   ALPINE_IMAGE=docker.io/library/alpine:3.21.3 \
   GOLANG_IMAGE=docker.io/library/golang:1.24.2-alpine \
-  VERSION=1.6.2 \
-  HASH=aa9a9401d27c1ad440627bbe7093d7e9ff47d325aac27b89a2cbdd56e25f3625
+  VERSION=1.7.1 \
+  HASH=95b639f8ccbb714da98e331ef8813f790d447fce5417f2f8a575f3c62bfb1474
 
 FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE AS bins
 ARG VERSION HASH
@@ -13,12 +13,6 @@ RUN wget https://github.com/containernetworking/plugins/archive/refs/tags/v${VER
   && rm -- "v${VERSION}.tar.gz"
 
 WORKDIR /go/plugins-$VERSION
-
-# https://github.com/containernetworking/plugins/issues/1172
-RUN set -x \
-  && go get golang.org/x/net@v0.38.0 \
-  && go mod tidy \
-  && go mod vendor
 
 ARG TARGETPLATFORM
 RUN set -x \
