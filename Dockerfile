@@ -41,6 +41,8 @@ COPY src/cni-node /bin/cni-node
 
 
 FROM scratch
+LABEL org.opencontainers.image.licenses="Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/juanluisvaladas/cni-node"
 COPY --from=baselayout / /
 ARG VERSION
 COPY --from=bins /go/plugins-$VERSION/bin/ /opt/cni/bin/
