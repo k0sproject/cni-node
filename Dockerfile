@@ -1,8 +1,8 @@
 ARG \
-  ALPINE_IMAGE=docker.io/library/alpine:3.21.3 \
-  GOLANG_IMAGE=docker.io/library/golang:1.24.2-alpine \
-  VERSION=1.7.1 \
-  HASH=95b639f8ccbb714da98e331ef8813f790d447fce5417f2f8a575f3c62bfb1474
+  ALPINE_IMAGE=docker.io/library/alpine:3.22.2 \
+  GOLANG_IMAGE=docker.io/library/golang:1.25.2-alpine \
+  VERSION=1.8.0 \
+  HASH=f0510b4452dda4b08d4b088d02e005ac507cb96fb7247b4422ae591286390369
 
 FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE AS bins
 ARG VERSION HASH
