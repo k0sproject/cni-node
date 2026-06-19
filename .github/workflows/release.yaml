@@ -1,0 +1,19 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v?*
+
+jobs:
+  build:
+    name: Build OCI image
+    uses: ./.github/workflows/build.yaml
+    with:
+      registry: quay.io
+      image-owner: ${{ github.repository_owner }}
+      image-name: ${{ github.event.repository.name }}
+      image-tag: ${{ github.ref_name }}
+    secrets:
+      registry-username: ${{ secrets.DOCKER_USERNAME }}
+      registry-password: ${{ secrets.DOCKER_PASSWORD }}
