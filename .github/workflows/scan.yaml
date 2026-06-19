@@ -14,28 +14,13 @@ jobs:
       security-events: write # upload sarif results
 
     steps:
-      - name: Prepare
-        id: prep
+      - name: Determine latest release
+        id: latest-release
+        if: github.event.release.tag_name == ''
         env:
-          PUBLISHED_TAG: ${{ github.event.release.tag_name }}
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -n "$PUBLISHED_TAG" ]; then
-            gitTag="$PUBLISHED_TAG"
-          else
-            # Get the tag name from the latest GitHub release
-            gitTag="$(gh api repos/{owner}/{repo}/releases/latest --jq .tag_name)"
-          fi
-
-          # Determine OCI image tag
-          imageTag="${gitTag//+/-}"
-          imageTag="${imageTag#v}"
-          
-          {
-            echo git-tag="$gitTag"
-            echo image-tag="$imageTag"
-          } >>"$GITHUB_OUTPUT"
+        run: gh api 'repos/{owner}/{repo}/releases/latest' --jq '"tag-name=\(.tag_name)"' >>"$GITHUB_OUTPUT"
 
       # The checkout is solely required for the upload-sarif action. It needs to
       # know the ref and sha. Providing those manually won't work, for unknown
@@ -43,13 +28,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
-          ref: ${{ format('refs/tags/{0}', steps.prep.outputs.git-tag) }}
+          ref: ${{ format('refs/tags/{0}', github.event.release.tag_name || steps.latest-release.outputs.tag-name) }}
           persist-credentials: false
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ format('quay.io/{0}:{1}', github.repository, steps.prep.outputs.image-tag) }}
+          image-ref: ${{ format('quay.io/{0}:{1}', github.repository, github.event.release.tag_name || steps.latest-release.outputs.tag-name) }}
           format: sarif
           output: trivy-results.sarif
 
