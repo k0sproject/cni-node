@@ -1,0 +1,63 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    ":configMigration",
+    ":gitSignOff",
+    ":semanticCommitsDisabled"
+  ],
+  "gitAuthor": "k0s-bot <110385897+k0s-bot@users.noreply.github.com>",
+  "labels": [
+    "dependencies"
+  ],
+  "prTitleStrict": true,
+  "commitMessageAction": "Bump",
+  "commitMessageTopic": "{{depName}}",
+  "groupSingleUpdates": false,
+  "vulnerabilityAlerts": {
+    "enabled": false
+  },
+  "enabledManagers": [
+    "github-actions",
+    "dockerfile",
+    "custom.regex"
+  ],
+  "packageRules": [
+    {
+      "description": "No digest-only bumps",
+      "matchUpdateTypes": [
+        "digest"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Bump the Alpine-based Go image, including the -alpineX.Y suffix",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "matchPackageNames": [
+        "docker.io/library/golang"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-alpine(?<build>\\d+)\\.(?<revision>\\d+)$"
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Generic version bumps based on comments",
+      "managerFilePatterns": [
+        "**/Dockerfile*",
+        "**/*.yaml",
+        "**/*.yml"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+)( registryUrl=(?<registryUrl>.+))? depName=(?<depName>\\S+)( versioning=(?<versioning>.+))?\\n[^:=\\n]+[:=][ \\t]*[\"']?(?<currentValue>[^@\\s\"']+)(?:(@|[^:=\\n]+[:=][ \\t]*[\"']?)(?<currentDigest>[0-9a-f]{7,}))?[\"']?[ \\t]*(:?#|\\n)",
+        "[=:][ \\t]*[\"']?(?<currentValue>\\S+?)[\"']?[ \\t]*# renovate: datasource=(?<datasource>\\S+)( registryUrl=(?<registryUrl>.+))? depName=(?<depName>\\S+)( versioning=(?<versioning>.+))?\\n"
+      ],
+      "datasourceTemplate": "{{{datasource}}}",
+      "versioningTemplate": "{{#if versioning}}{{{versioning}}}{{else}}semver{{/if}}",
+      "extractVersionTemplate": "^v?(?<version>.+)"
+    }
+  ]
+}
