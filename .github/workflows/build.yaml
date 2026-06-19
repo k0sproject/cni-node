@@ -1,40 +1,42 @@
 name: Build
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
-    tags:
-      - v?*
+  workflow_call:
+    inputs:
+      registry:
+        type: string
+        required: true
+        description: The registry to push the image to.
+      image-owner:
+        type: string
+        required: true
+        description: The owner of the image.
+      image-name:
+        type: string
+        required: true
+        description: The name of the image.
+      image-tag:
+        type: string
+        required: true
+        description: The tag of the image.
+    secrets:
+      registry-username:
+        description: The username for the registry.
+      registry-password:
+        description: The password for the registry.
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Prepare
-        id: prep
-        run: |
-          # If this is a git tag, use the tag name as a docker tag
-          if [[ $GITHUB_REF == refs/tags/v?* ]]; then
-            registry=quay.io
-            name="$GITHUB_REPOSITORY"
-            tag="${GITHUB_REF#refs/tags/v}"
-            tag="${tag//+/-}"
-          else
-            registry=ttl.sh
-            name="${GITHUB_REPOSITORY//\//-}-$GITHUB_SHA-$GITHUB_RUN_ID"
-            tag=1d
-          fi
-
-          {
-            echo registry="$registry"
-            echo name="$name"
-            echo tag="$tag"
-          } >>"$GITHUB_OUTPUT"
+        id: prepare
+        env:
+          # GitHub Actions doesn't seem to support the secrets
+          # context in if fields, hence this workaround.
+          REGISTRY_CREDENTIALS_AVAILABLE: "${{ case(secrets.registry-username != '', 'true', '') }}"
+        run: echo registry-credentials-available="$REGISTRY_CREDENTIALS_AVAILABLE" >>"$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
@@ -51,28 +53,21 @@ jobs:
         with:
           builder: ${{ steps.buildx.outputs.name }}
           platforms: linux/amd64,linux/arm64,linux/arm,linux/riscv64
-          tags: ${{ format('{0}/{1}:{2}', steps.prep.outputs.registry, steps.prep.outputs.name, steps.prep.outputs.tag) }}
+          tags: ${{ format('{0}/{1}/{2}:{3}', inputs.registry, inputs.image-owner, inputs.image-name, inputs.image-tag) }}
           outputs: type=oci,dest=oci-image.tar
-
-      - name: Compress OCI image archive
-        # Pre-compress the image archive so that the upload-artifact action
-        # doesn't try to do it. The layers inside the tar archive are themselves
-        # already gzip compressed, so this is not for size reduction, but solely
-        # to prevent the very slow compression process in the upload-artifact
-        # action.
-        # See: https://github.com/actions/upload-artifact/issues/199
-        # See: https://github.com/actions/toolkit/blob/6c1f9eaae833355a0b212b66c5f2e3ac366de185/packages/artifact/src/internal/upload-gzip.ts#L11-L33
-        # Might be fixed when upload-artifact@v4 gets released: https://github.com/actions/toolkit/pull/1488
-        run: zstdmt --fast oci-image.tar
 
       - name: Upload OCI image archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: oci-image.tar.zst
-          path: oci-image.tar.zst
+          name: ${{ format('{0}-{1}.tar', inputs.image-name, inputs.image-tag) }}
+          path: oci-image.tar
+          # The layers inside the tar archive are themselves already gzip
+          # compressed. No need to compress the metadata. Speeds things up a
+          # bit.
+          compression-level: 0
 
       - name: Extract OCI image archive
-        run: mkdir image && tar xf oci-image.tar.zst -C image/
+        run: mkdir image && tar xf oci-image.tar -C image/
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
@@ -83,18 +78,16 @@ jobs:
           exit-code: "1"
 
       - name: Log in to registry
-        if: steps.prep.outputs.registry != 'ttl.sh'
+        if: steps.prepare.outputs.registry-credentials-available
         uses: redhat-actions/podman-login@4934294ad0449894bcd1e9f191899d7292469603 # v1.7
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-          registry: ${{ steps.prep.outputs.registry }}
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.registry-username }}
+          password: ${{ secrets.registry-password }}
 
       - name: Upload OCI image to registry
         env:
-          REGISTRY: ${{ steps.prep.outputs.registry }}
-          NAME: ${{ steps.prep.outputs.name }}
-          TAG: ${{ steps.prep.outputs.tag }}
+          IMAGE: ${{ format('{0}/{1}/{2}:{3}', inputs.registry, inputs.image-owner, inputs.image-name, inputs.image-tag) }}
         run: |
           podmanArgs=(-v "$(realpath oci-image.tar):/image.tar:ro")
           skopeoArgs=(--multi-arch all --preserve-digests)
@@ -107,4 +100,4 @@ jobs:
           set -x
           podman run "${podmanArgs[@]}" \
             docker://quay.io/skopeo/stable:v1.18.0 copy "${skopeoArgs[@]}" \
-            oci-archive:/image.tar "docker://$REGISTRY/$NAME:$TAG"
+            oci-archive:/image.tar "docker://$IMAGE"

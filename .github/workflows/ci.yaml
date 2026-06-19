@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  pull_request: &triggers
+    branches:
+      - main
+    paths:
+      - .github/workflows/ci.yaml
+      - .github/workflows/build.yaml
+      - Dockerfile
+      - .dockerignore
+      # keep in sync with .dockerignore
+      - src/**
+  push: *triggers
+
+jobs:
+  build:
+    name: Build OCI image
+    uses: ./.github/workflows/build.yaml
+    with:
+      # This will produce images tagged like ttl.sh/k0sproject/cni-node-27741332811-1:1d.
+      registry: ttl.sh
+      image-owner: ${{ github.repository_owner }}
+      image-name: ${{ format('{0}-{1}-{2}', github.event.repository.name, github.run_id, github.run_attempt) }}
+      image-tag: 1d
