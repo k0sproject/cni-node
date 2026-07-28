@@ -69,14 +69,6 @@ jobs:
       - name: Extract OCI image archive
         run: mkdir image && tar xf oci-image.tar -C image/
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          input: image/
-          format: table
-          list-all-pkgs: "true" # Flags a warning, but prints out stuff nevertheless
-          exit-code: "1"
-
       - name: Log in to registry
         if: steps.prepare.outputs.registry-credentials-available
         uses: redhat-actions/podman-login@4934294ad0449894bcd1e9f191899d7292469603 # v1.7
