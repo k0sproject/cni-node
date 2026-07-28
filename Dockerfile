@@ -5,14 +5,20 @@ ARG \
   HASH=34bd82d47e981940751619c9cc44c095bb90bfcaf8d71865cbb822c37690a764
 
 FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE AS sources
+RUN apk add --no-cache patch
 ENV GOTOOLCHAIN=local GOTELEMETRY=off
 WORKDIR /go/src/containernetworking-plugins
 ARG VERSION HASH
-RUN --mount=type=tmpfs,target=/tmp \
+RUN --mount=source=files/patches,target=/run/patches,ro \
+  --mount=type=tmpfs,target=/tmp \
   set -euo pipefail \
   && wget -qO /tmp/sources.tar.gz https://github.com/containernetworking/plugins/archive/refs/tags/v$VERSION.tar.gz \
   && { echo $HASH /tmp/sources.tar.gz | sha256sum -c -; } || { sha256sum /tmp/sources.tar.gz; exit 1; } \
-  && tar xf /tmp/sources.tar.gz --strip-components=1
+  && tar xf /tmp/sources.tar.gz --strip-components=1 \
+  && for p in /run/patches/*; do \
+    echo Applying "$p" >&2; \
+    patch -p1 <"$p"; \
+  done
 
 
 FROM sources AS bins
