@@ -1,0 +1,149 @@
+From 222058b490000246306210646c50a790f0be3a4c Mon Sep 17 00:00:00 2001
+From: Tom Wieczorek <twieczorek@mirantis.com>
+Date: Wed, 17 Jun 2026 13:05:21 +0200
+Subject: [PATCH 1/2] bridge: always pin the bridge MAC address
+
+The ensureAddr function pins the bridge's MAC address so it doesn't
+change as ports come and go. The pinning happens after the gateway
+address is set, so if a run set the address but then failed before
+pinning, subsequent runs never reattempted to pin the MAC, leaving
+behind a bridge with a floating MAC.
+
+Always pin the MAC, even if the gateway address is already present,
+regardless of the outcomes of previous attempts.
+
+Signed-off-by: Tom Wieczorek <twieczorek@mirantis.com>
+---
+ plugins/main/bridge/bridge.go      | 12 ++++--
+ plugins/main/bridge/bridge_test.go | 67 ++++++++++++++++++++++++++++++
+ 2 files changed, 75 insertions(+), 4 deletions(-)
+
+diff --git a/plugins/main/bridge/bridge.go b/plugins/main/bridge/bridge.go
+index 476e6d5f..860ba8d1 100644
+--- a/plugins/main/bridge/bridge.go
++++ b/plugins/main/bridge/bridge.go
+@@ -271,11 +271,13 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool)
+ 	}
+ 
+ 	ipnStr := ipn.String()
++	addrFound := false
+ 	for _, a := range addrs {
+ 
+ 		// string comp is actually easiest for doing IPNet comps
+ 		if a.IPNet.String() == ipnStr {
+-			return nil
++			addrFound = true
++			break
+ 		}
+ 
+ 		// Multiple IPv6 addresses are allowed on the bridge if the
+@@ -293,9 +295,11 @@ func ensureAddr(br netlink.Link, family int, ipn *net.IPNet, forceAddress bool)
+ 		}
+ 	}
+ 
+-	addr := &netlink.Addr{IPNet: ipn, Label: ""}
+-	if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
+-		return fmt.Errorf("could not add IP address %s to %q: %v", ipnStr, br.Attrs().Name, err)
++	if !addrFound {
++		addr := &netlink.Addr{IPNet: ipn, Label: ""}
++		if err := netlink.AddrAdd(br, addr); err != nil && err != syscall.EEXIST {
++			return fmt.Errorf("could not add IP address %s to %q: %v", ipnStr, br.Attrs().Name, err)
++		}
+ 	}
+ 
+ 	// Set the bridge's MAC to itself. Otherwise, the bridge will take the
+diff --git a/plugins/main/bridge/bridge_test.go b/plugins/main/bridge/bridge_test.go
+index 3ed19022..cd3f562f 100644
+--- a/plugins/main/bridge/bridge_test.go
++++ b/plugins/main/bridge/bridge_test.go
+@@ -21,6 +21,7 @@ import (
+ 	"net"
+ 	"os"
+ 	"strings"
++	"sync"
+ 
+ 	"github.com/coreos/go-iptables/iptables"
+ 	"github.com/networkplumbing/go-nft/nft"
+@@ -407,6 +408,30 @@ func (tc testCase) expectedCIDRs() ([]*net.IPNet, []*net.IPNet) {
+ 	return cidrsV4, cidrsV6
+ }
+ 
++// Attaches a veth port with an optional fixed MAC address to a bridge in the
++// current network namespace. To be cleaned up via the returned function.
++func attachVethPort(br netlink.Link, mac string) (func() error, error) {
++	linkAttrs := netlink.NewLinkAttrs()
++	linkAttrs.Name = "testport0"
++	if mac != "" {
++		hwAddr, err := net.ParseMAC(mac)
++		if err != nil {
++			return nil, err
++		}
++
++		linkAttrs.HardwareAddr = hwAddr
++	}
++	veth := &netlink.Veth{LinkAttrs: linkAttrs, PeerName: "testport1"}
++	if err := netlink.LinkAdd(veth); err != nil {
++		return nil, err
++	}
++	if err := netlink.LinkSetMaster(veth, br); err != nil {
++		return nil, err
++	}
++
++	return sync.OnceValue(func() error { return netlink.LinkDel(veth) }), nil
++}
++
+ // delBridgeAddrs() deletes addresses from the bridge
+ func delBridgeAddrs(testNS ns.NetNS) {
+ 	err := testNS.Do(func(ns.NetNS) error {
+@@ -2377,6 +2402,48 @@ var _ = Describe("bridge Operations", func() {
+ 				})
+ 				Expect(err).NotTo(HaveOccurred())
+ 			})
++
++			It(fmt.Sprintf("[%s] (%d) keeps a stable MAC even if the gateway address already exists", ver, i), func() {
++				err := originalNS.Do(func(ns.NetNS) error {
++					defer GinkgoRecover()
++
++					tc.cniVersion = ver
++					br, _, err := setupBridge(tc.netConf())
++					Expect(err).NotTo(HaveOccurred())
++					link, err := netlinksafe.LinkByName(BRNAME)
++					Expect(err).NotTo(HaveOccurred())
++					originalMAC := link.Attrs().HardwareAddr
++
++					// Pre-add the gateway address the plugin is going to
++					// configure, as left behind by an ADD that failed midway.
++					_, subnet, err := net.ParseCIDR(tc.subnet)
++					Expect(err).NotTo(HaveOccurred())
++					gwIP := calcGatewayIP(subnet)
++					err = netlink.AddrAdd(br, &netlink.Addr{
++						IPNet: &net.IPNet{IP: gwIP, Mask: subnet.Mask},
++					})
++					Expect(err).NotTo(HaveOccurred())
++
++					cmdAddDelTest(originalNS, targetNS, tc, dataDir)
++
++					// The MAC must have been pinned nevertheless: it neither
++					// got zeroed when the container veth was removed, nor
++					// does it change with port churn.
++					link, err = netlinksafe.LinkByName(BRNAME)
++					Expect(err).NotTo(HaveOccurred())
++					Expect(link.Attrs().HardwareAddr).To(Equal(originalMAC))
++
++					cleanupVethPort, err := attachVethPort(br, "02:00:00:00:00:01")
++					Expect(err).NotTo(HaveOccurred())
++					defer func() { Expect(cleanupVethPort()).To(Succeed()) }()
++
++					link, err = netlinksafe.LinkByName(BRNAME)
++					Expect(err).NotTo(HaveOccurred())
++					Expect(link.Attrs().HardwareAddr).To(Equal(originalMAC))
++					return nil
++				})
++				Expect(err).NotTo(HaveOccurred())
++			})
+ 		}
+ 
+ 		It(fmt.Sprintf("[%s] uses an explicit MAC addresses for the container iface (from CNI_ARGS)", ver), func() {
+-- 
+2.54.0
+
