@@ -2,9 +2,6 @@ name: Security scan
 on:
   schedule:
     - cron: 0 2 * * 1-5
-  release:
-    types:
-      - published
   workflow_dispatch:
 
 jobs:
