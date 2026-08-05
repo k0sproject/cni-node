@@ -1,6 +1,6 @@
 ARG \
   ALPINE_IMAGE=docker.io/library/alpine:3.24.1 \
-  GOLANG_IMAGE=docker.io/library/golang:1.26.4-alpine3.24 \
+  GOLANG_IMAGE=docker.io/library/golang:1.26.5-alpine3.24 \
   VERSION=1.9.1 \
   HASH=34bd82d47e981940751619c9cc44c095bb90bfcaf8d71865cbb822c37690a764
 
@@ -13,6 +13,11 @@ RUN --mount=type=tmpfs,target=/tmp \
   && wget -qO /tmp/sources.tar.gz https://github.com/containernetworking/plugins/archive/refs/tags/v$VERSION.tar.gz \
   && { echo $HASH /tmp/sources.tar.gz | sha256sum -c -; } || { sha256sum /tmp/sources.tar.gz; exit 1; } \
   && tar xf /tmp/sources.tar.gz --strip-components=1
+
+# Patch some deps to silence CVE scanners
+RUN go mod edit -replace golang.org/x/net=golang.org/x/net@v0.57.0 \
+  && go mod tidy \
+  && go mod vendor 
 
 
 FROM sources AS bins
