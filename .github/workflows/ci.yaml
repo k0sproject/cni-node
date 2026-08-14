@@ -11,6 +11,7 @@ on:
       - .dockerignore
       # keep in sync with .dockerignore
       - src/**
+      - files/**
   push: *triggers
 
 jobs:
