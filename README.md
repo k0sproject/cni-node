@@ -2,33 +2,41 @@
 
 [![License: Apache-2.0][Apache 2.0 Badge]][Apache 2.0]
 [![GitHub Release Badge]][GitHub Releases]
-[![CNI Plugins Badge]][CNI Plugins Release]
 
-A [Docker] image for installing and configuring [CNI Plugins] and [Multus CNI]
-on a node. For example on a [Kubernetes] one.
+An OCI image for installing and configuring [CNI Plugins] and [Multus CNI] on a
+node. For example on a [Kubernetes] one.
 
 * [Usage](#usage)
   * [Install CNI](#install-cni)
     * [Binaries](#binaries)
 * [Usage in Kubernetes](#usage-in-kubernetes)
-  * [Simple Example](#simple-example)
-* [License](#license)
+  * [Simple-ish Example](#simple-ish-example)
 
+Work based on <https://github.com/openvnf/cni-node>; We've simplified the setup
+very much, and thus "broken" any backwards compatibility so hence a no-fork repo
+for this.
 
-Work based on https://github.com/openvnf/cni-node; We've simplified the setup very much, and thus "broken" any backwards compatibility so hence a no-fork repo for this.
+[Apache 2.0]: https://opensource.org/licenses/Apache-2.0
+[Apache 2.0 Badge]: https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg?style=flat-square
+[GitHub Releases]: https://github.com/k0sproject/cni-node/releases
+[GitHub Release Badge]: https://img.shields.io/github/release/k0sproject/cni-node/all.svg?style=flat-square
+
+[CNI Plugins]: https://github.com/containernetworking/plugins
+[Multus CNI]: https://github.com/k8snetworkplumbingwg/multus-cni
+[Kubernetes]: https://kubernetes.io
 
 ## Usage
 
 Run without arguments to see usage:
 
-```
-$ docker run --rm quay.io/k0sproject/cni-node:latest
+```sh
+docker run --rm quay.io/k0sproject/cni-node:latest
 ```
 
 Print list of available CNI plugins:
 
-```
-$ docker run --rm quay.io/k0sproject/cni-node:latest list
+```sh
+docker run --rm quay.io/k0sproject/cni-node:latest list
 ```
 
 ### Install CNI
@@ -42,14 +50,13 @@ The following components can be installed:
 CNI plugins binaries are baked into the image and installed to the
 "/host/opt/cni/bin" directory:
 
-```
-$ docker run --rm \
-    -v /opt/cni/bin:/host/opt/cni/bin \
-    quay.io/openvnf/cni-node install --plugins=flannel,ipvlan
+```sh
+docker run --rm \
+  -v /opt/cni/bin:/host/opt/cni/bin \
+  quay.io/k0sproject/cni-node install --plugins=flannel,ipvlan
 ```
 
-Will install specified plugins to hosts "/opt/cni/bin".
-
+Will install specified plugins to hosts `/opt/cni/bin`.
 
 ## Usage in Kubernetes
 
@@ -60,7 +67,8 @@ one later on.
 
 ### Simple-ish Example
 
-An example with kube-router where cni-node container is used as an `initContainer` to push the CNI bins into the node:
+An example with kube-router where cni-node container is used as an
+`initContainer` to push the CNI bins into the node:
 
 ```yaml
 apiVersion: apps/v1
@@ -182,20 +190,3 @@ spec:
           readOnly: false
 
 ```
-
-<!-- Links -->
-
-[RBAC]: https://kubernetes.io/docs/reference/access-authn-authz/rbac
-[Docker]: https://docs.docker.com
-[DaemonSet]: https://kubernetes.io/docs/concepts/workloads/controllers/daemonset
-[Kubernetes]: https://kubernetes.io
-[CNI Plugins]: https://github.com/containernetworking/plugins
-[CNI Node Docker Image]: Dockerfile
-
-<!-- Badges -->
-
-[Apache 2.0]: https://opensource.org/licenses/Apache-2.0
-[Apache 2.0 Badge]: https://img.shields.io/badge/License-Apache%202.0-yellowgreen.svg?style=flat-square
-[GitHub Releases]: https://github.com/k0sproject/cni-node/releases
-[GitHub Release Badge]: https://img.shields.io/github/release/k0sproject/cni-node/all.svg?style=flat-square
-[CNI Plugins Release]: https://github.com/containernetworking/plugins/releases/tag/v0.9.1
