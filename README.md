@@ -3,6 +3,7 @@
 [![License: Apache-2.0][Apache 2.0 Badge]][Apache 2.0]
 [![GitHub Release Badge]][GitHub Releases]
 [![CNI Plugins Badge]][CNI Plugins Release]
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fk0sproject%2Fcni-node.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fk0sproject%2Fcni-node?ref=badge_shield)
 
 A [Docker] image for installing and configuring [CNI Plugins] and [Multus CNI]
 on a node. For example on a [Kubernetes] one.
@@ -199,3 +200,7 @@ spec:
 [GitHub Releases]: https://github.com/k0sproject/cni-node/releases
 [GitHub Release Badge]: https://img.shields.io/github/release/k0sproject/cni-node/all.svg?style=flat-square
 [CNI Plugins Release]: https://github.com/containernetworking/plugins/releases/tag/v0.9.1
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fk0sproject%2Fcni-node.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fk0sproject%2Fcni-node?ref=badge_large)
