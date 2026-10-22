@@ -1,6 +1,6 @@
 ARG \
-  ALPINE_IMAGE=docker.io/library/alpine:3.24.1 \
-  GOLANG_IMAGE=docker.io/library/golang:1.26.5-alpine3.24 \
+  ALPINE_IMAGE=docker.io/library/alpine:3.24.3 \
+  GOLANG_IMAGE=docker.io/library/golang:1.26.10-alpine3.24 \
   VERSION=1.9.1 \
   HASH=34bd82d47e981940751619c9cc44c095bb90bfcaf8d71865cbb822c37690a764
 
@@ -20,10 +20,8 @@ RUN --mount=source=files/patches,target=/run/patches,ro \
     patch -p1 <"$p"; \
   done
 
-# Patch some deps to silence CVE scanners
-RUN go mod edit -replace golang.org/x/net=golang.org/x/net@v0.57.0 \
-  && go mod tidy \
-  && go mod vendor 
+# Re-vendor the dependencies, as the patches may have touched go.mod/go.sum
+RUN go mod vendor
 
 
 FROM sources AS bins
