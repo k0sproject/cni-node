@@ -1,6 +1,6 @@
 ARG \
-  ALPINE_IMAGE=docker.io/library/alpine:3.22.2 \
-  GOLANG_IMAGE=docker.io/library/golang:1.25.2-alpine \
+  ALPINE_IMAGE=docker.io/library/alpine:3.22.7 \
+  GOLANG_IMAGE=docker.io/library/golang:1.26.10-alpine3.23 \
   VERSION=1.8.0 \
   HASH=f0510b4452dda4b08d4b088d02e005ac507cb96fb7247b4422ae591286390369
 
@@ -20,6 +20,9 @@ RUN --mount=source=files/patches,target=/run/patches,ro \
     echo Applying "$p" >&2; \
     patch -p1 <"$p"; \
   done
+
+# Re-vendor the dependencies, as the patches may have touched go.mod/go.sum
+RUN go mod vendor
 
 
 FROM sources AS bins
