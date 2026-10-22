@@ -4,6 +4,7 @@ on:
   pull_request: &triggers
     branches:
       - main
+      - release-*
     paths:
       - .github/workflows/ci.yaml
       - .github/workflows/build.yaml
