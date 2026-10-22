@@ -4,29 +4,22 @@ ARG \
   VERSION=1.8.0 \
   HASH=f0510b4452dda4b08d4b088d02e005ac507cb96fb7247b4422ae591286390369
 
-FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE AS bins
+FROM --platform=$BUILDPLATFORM $GOLANG_IMAGE AS sources
+ENV GOTOOLCHAIN=local GOTELEMETRY=off
+WORKDIR /go/src/containernetworking-plugins
 ARG VERSION HASH
+RUN --mount=type=tmpfs,target=/tmp \
+  set -euo pipefail \
+  && wget -qO /tmp/sources.tar.gz https://github.com/containernetworking/plugins/archive/refs/tags/v$VERSION.tar.gz \
+  && { echo $HASH /tmp/sources.tar.gz | sha256sum -c -; } || { sha256sum /tmp/sources.tar.gz; exit 1; } \
+  && tar xf /tmp/sources.tar.gz --strip-components=1
 
-RUN wget https://github.com/containernetworking/plugins/archive/refs/tags/v${VERSION}.tar.gz \
-  && { echo "${HASH} *v${VERSION}.tar.gz" | sha256sum -c -; } \
-  && tar xf "v${VERSION}.tar.gz" -C /go \
-  && rm -- "v${VERSION}.tar.gz"
 
-WORKDIR /go/plugins-$VERSION
-
-ARG TARGETPLATFORM
-RUN set -x \
-  && apk add bash \
-  && mkdir -p /opt/stage/usr/local/bin \
-  && case "${TARGETPLATFORM-~}" in \
-    linux/amd64) export GOARCH=amd64 ;; \
-    linux/arm64) export GOARCH=arm64 ;; \
-    linux/arm/v7) export GOARCH=arm ;; \
-    linux/riscv64) export GOARCH=riscv64 ;; \
-    ~);; \
-    *) echo Unsupported target platform: "$TARGETPLATFORM" >&2; exit 1;; \
-  esac \
-  && CGO_ENABLED=0 ./build_linux.sh -trimpath -buildvcs=false \
+FROM sources AS bins
+ARG TARGETARCH SOURCE_DATE_EPOCH
+RUN --mount=type=cache,id=calico-gocache-$TARGETARCH,target=/root/.cache/go-build \
+  --network=none \
+  CGO_ENABLED=0 GOARCH=$TARGETARCH ./build_linux.sh -trimpath -buildvcs=false \
     -ldflags "-s -w -extldflags -static -X github.com/containernetworking/plugins/pkg/utils/buildversion.BuildVersion=v$VERSION"
 
 
@@ -45,6 +38,6 @@ LABEL org.opencontainers.image.licenses="Apache-2.0" \
       org.opencontainers.image.source="https://github.com/k0sproject/cni-node"
 COPY --from=baselayout / /
 ARG VERSION
-COPY --from=bins /go/plugins-$VERSION/bin/ /opt/cni/bin/
+COPY --from=bins /go/src/containernetworking-plugins/bin/ /opt/cni/bin/
 ENTRYPOINT ["/bin/cni-node"]
 CMD ["install"]
